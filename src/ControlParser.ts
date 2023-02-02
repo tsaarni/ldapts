@@ -1,10 +1,14 @@
 import { Ber, BerReader } from 'asn1';
 
-import type { Control } from './controls';
+import type { Control, ControlOptions } from './controls';
 import { EntryChangeNotificationControl, PagedResultsControl, PersistentSearchControl, ServerSideSortingRequestControl } from './controls';
+
+type ControlConstructor = new (options?: ControlOptions) => Control;
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class ControlParser {
+  private static controlMap = new Map<string, ControlConstructor>();
+
   public static parse(reader: BerReader): Control | null {
     if (reader.readSequence() === null) {
       return null;
@@ -30,33 +34,25 @@ export class ControlParser {
 
     let control: Control;
 
-    switch (type) {
-      case EntryChangeNotificationControl.type:
-        control = new EntryChangeNotificationControl({
-          critical,
-        });
-        break;
-      case PagedResultsControl.type:
-        control = new PagedResultsControl({
-          critical,
-        });
-        break;
-      case PersistentSearchControl.type:
-        control = new PersistentSearchControl({
-          critical,
-        });
-        break;
-      case ServerSideSortingRequestControl.type:
-        control = new ServerSideSortingRequestControl({
-          critical,
-        });
-        break;
-      default:
-        return null;
+    const cls = ControlParser.controlMap.get(type);
+    if (cls) {
+      control = new cls({ critical });
+    } else {
+      return null;
     }
 
     const controlReader = new BerReader(value);
     control.parse(controlReader);
     return control;
   }
+
+  public static registerControl(type: string, control: ControlConstructor): void {
+    ControlParser.controlMap.set(type, control);
+  }
 }
+
+// Register the built-in controls
+ControlParser.registerControl(EntryChangeNotificationControl.type, EntryChangeNotificationControl);
+ControlParser.registerControl(PagedResultsControl.type, PagedResultsControl);
+ControlParser.registerControl(PersistentSearchControl.type, PersistentSearchControl);
+ControlParser.registerControl(ServerSideSortingRequestControl.type, ServerSideSortingRequestControl);
